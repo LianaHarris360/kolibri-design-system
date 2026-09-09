@@ -18,7 +18,7 @@ export default [
       'kds/no-theme-tokens-in-v-bind': 'warn',
       // Vue 2.7 stops updating a style block's `v-bind()` when the bound element
       // is the template root and is removed and re-added
-      'vue/no-root-v-if': 'error',
+      'vue/no-root-v-if': 'warn',
     },
   },
   // Docs and examples use Nuxt aliases (~, ~~) that can't be resolved

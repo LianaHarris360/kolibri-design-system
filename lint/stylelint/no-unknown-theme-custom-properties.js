@@ -51,6 +51,12 @@ function declarationValueIndex(decl) {
   return decl.prop.length + prefix + between;
 }
 
+/** The same, for an at-rule's params, which follow `@`, the name, and any space. */
+function atRuleParamsIndex(atRule) {
+  const afterName = atRule.raws.afterName !== undefined ? atRule.raws.afterName : ' ';
+  return 1 + atRule.name.length + afterName.length;
+}
+
 const rule = (primary, secondary) => {
   return (root, result) => {
     const validOptions = stylelint.utils.validateOptions(
@@ -76,12 +82,12 @@ const rule = (primary, secondary) => {
 
     const validNames = getThemeCssVariableNames();
 
-    root.walkDecls(decl => {
-      valueParser(decl.value).walk(node => {
-        if (node.type !== 'function' || node.value !== 'var') {
+    const reportUnknownNames = (node, value, valueIndex) => {
+      valueParser(value).walk(valueNode => {
+        if (valueNode.type !== 'function' || valueNode.value !== 'var') {
           return;
         }
-        const [nameNode] = node.nodes;
+        const [nameNode] = valueNode.nodes;
         if (!nameNode) {
           return;
         }
@@ -93,18 +99,23 @@ const rule = (primary, secondary) => {
         if (isIgnored(name, ignoreProperties)) {
           return;
         }
-        const valueIndex = declarationValueIndex(decl);
         stylelint.utils.report({
           result,
           ruleName,
           message: messages.rejected,
           messageArgs: [name, suggestThemeCssVariableName(name)],
-          node: decl,
+          node,
           index: valueIndex + nameNode.sourceIndex,
           endIndex: valueIndex + nameNode.sourceEndIndex,
         });
       });
-    });
+    };
+
+    root.walkDecls(decl => reportUnknownNames(decl, decl.value, declarationValueIndex(decl)));
+    // a `var()` passed to an at-rule, e.g. `@include shadow(var(--tokens-surface))`
+    root.walkAtRules(atRule =>
+      reportUnknownNames(atRule, atRule.params, atRuleParamsIndex(atRule)),
+    );
   };
 };
 

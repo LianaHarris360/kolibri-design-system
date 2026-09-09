@@ -47,7 +47,7 @@ and registered as the `kds` plugin in `eslint.config.mjs`.
 
 ### `vue/no-root-v-if` (ESLint)
 
-Enabled in `eslint.config.mjs`. Vue 2.7 stops updating a style block's `v-bind()` when
+Enabled as a warning in `eslint.config.mjs`. Vue 2.7 stops updating a style block's `v-bind()` when
 the bound element is the template root and is removed and re-added (e.g. by a
 `v-if`). Wrapping the conditional element in a plain, non-conditional element avoids it.
 

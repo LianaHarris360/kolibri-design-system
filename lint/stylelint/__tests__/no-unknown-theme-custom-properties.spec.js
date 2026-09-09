@@ -120,6 +120,18 @@ describe('no-unknown-theme-custom-properties', () => {
     expect(results[0].errored).toBe(true);
   });
 
+  it('reports a misspelled name passed to an at-rule, pointing at the name', async () => {
+    const code = '.a { @include shadow(var(--tokens-surfase)); }';
+    const warnings = await warningsFor(lintScss(code));
+    expect(warnings).toHaveLength(1);
+    expect(code.slice(warnings[0].column - 1, warnings[0].endColumn - 1)).toBe('--tokens-surfase');
+  });
+
+  it('accepts a valid name passed to an at-rule', async () => {
+    const warnings = await warningsFor(lintScss('.a { @include shadow(var(--tokens-surface)); }'));
+    expect(warnings).toHaveLength(0);
+  });
+
   it('reports a misspelled name inside a single file component style block', async () => {
     const warnings = await warningsFor(
       lintVue(`<template><div class="a" /></template>
