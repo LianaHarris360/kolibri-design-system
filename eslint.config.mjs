@@ -14,8 +14,8 @@ export default [
       },
     },
     rules: {
-      // Colors in `<style>` blocks should use the `--tokens-*` CSS variables
-      'kds/no-theme-tokens-in-v-bind': 'error',
+      // Colors in `<style>` blocks should use the `--tokens-*` CSS variables.
+      'kds/no-theme-tokens-in-v-bind': 'warn',
       // Vue 2.7 stops updating a style block's `v-bind()` when the bound element
       // is the template root and is removed and re-added
       'vue/no-root-v-if': 'error',

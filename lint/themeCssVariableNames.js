@@ -9,12 +9,16 @@ const path = require('node:path');
 
 const { parse } = require('@babel/parser');
 
+const {
+  THEME_VARIABLE_PREFIXES,
+  flattenThemeTree,
+  formatPathSegment,
+} = require('../lib/styles/cssVariableNaming');
+
 const STYLES_DIR = path.resolve(__dirname, '../lib/styles');
 
 const COLORS_DEFAULT_FILE = path.join(STYLES_DIR, 'colorsDefault.js');
 const COLORS_MATERIAL_FILE = path.join(STYLES_DIR, 'colorsMaterial.js');
-
-const THEMED_PREFIXES = ['--tokens-', '--brand-', '--palette-'];
 
 function parseModule(file) {
   return parse(fs.readFileSync(file, 'utf-8'), { sourceType: 'module' });
@@ -64,19 +68,11 @@ function propertyKey(property) {
 }
 
 /*
- * Mirrors `formatPathSegment` in `lib/styles/themeCssVariables.js`, which emits
- * version keys as `vN` (e.g. `v_400` -> `v400`).
+ * The object literal as a plain nested object. Only its shape matters, so every
+ * leaf becomes an empty string rather than the color value it holds.
  */
-function formatPathSegment(key) {
-  return key.replace(/^v_(\d+)$/, 'v$1');
-}
-
-/**
- * Walks a color/token object literal and returns the CSS variable name of every
- * leaf, joining path segments with hyphens, as `themeCssVariables.js` does.
- */
-function collectNames(prefix, objectExpression) {
-  const names = [];
+function objectFromExpression(objectExpression) {
+  const tree = {};
   for (const property of objectExpression.properties) {
     if (property.type !== 'ObjectProperty') {
       continue;
@@ -85,14 +81,14 @@ function collectNames(prefix, objectExpression) {
     if (key === null) {
       continue;
     }
-    const name = `${prefix}-${formatPathSegment(key)}`;
-    if (property.value.type === 'ObjectExpression') {
-      names.push(...collectNames(name, property.value));
-    } else {
-      names.push(name);
-    }
+    tree[key] =
+      property.value.type === 'ObjectExpression' ? objectFromExpression(property.value) : '';
   }
-  return names;
+  return tree;
+}
+
+function collectNames(prefix, objectExpression) {
+  return flattenThemeTree(prefix, objectFromExpression(objectExpression)).map(([name]) => name);
 }
 
 let cachedNames = null;
@@ -105,9 +101,9 @@ function getThemeCssVariableNames() {
     return cachedNames;
   }
   const names = [
-    ...collectNames('--palette', findExportedObject(COLORS_MATERIAL_FILE, 'default')),
-    ...collectNames('--brand', findExportedObject(COLORS_DEFAULT_FILE, 'defaultBrandColors')),
-    ...collectNames('--tokens', findExportedObject(COLORS_DEFAULT_FILE, 'defaultTokenMapping')),
+    ...collectNames('palette', findExportedObject(COLORS_MATERIAL_FILE, 'default')),
+    ...collectNames('brand', findExportedObject(COLORS_DEFAULT_FILE, 'defaultBrandColors')),
+    ...collectNames('tokens', findExportedObject(COLORS_DEFAULT_FILE, 'defaultTokenMapping')),
   ];
   if (!names.length) {
     throw new Error('No theme CSS variable names were found in the theme source files');
@@ -117,7 +113,7 @@ function getThemeCssVariableNames() {
 }
 
 function isThemedCustomProperty(name) {
-  return THEMED_PREFIXES.some(prefix => name.startsWith(prefix));
+  return THEME_VARIABLE_PREFIXES.some(prefix => name.startsWith(prefix));
 }
 
 /**
@@ -132,7 +128,6 @@ function suggestThemeCssVariableName(name) {
 }
 
 module.exports = {
-  THEMED_PREFIXES,
   getThemeCssVariableNames,
   isThemedCustomProperty,
   suggestThemeCssVariableName,

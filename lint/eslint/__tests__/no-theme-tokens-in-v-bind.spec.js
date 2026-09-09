@@ -34,7 +34,7 @@ function fixes(declaration, fixed) {
     filename: 'Invalid.vue',
     code: sfc(declaration),
     output: sfc(fixed),
-    errors: [{ messageId: 'unexpectedTheme' }],
+    errors: [{ messageId: 'unexpectedThemeWithVariable' }],
   };
 }
 
@@ -103,7 +103,10 @@ ruleTester.run('no-theme-tokens-in-v-bind', rule, {
         "background: linear-gradient(v-bind('$themeTokens.surface'), v-bind('$themeTokens.fineLine'));",
       ),
       output: sfc('background: linear-gradient(var(--tokens-surface), var(--tokens-fineLine));'),
-      errors: [{ messageId: 'unexpectedTheme' }, { messageId: 'unexpectedTheme' }],
+      errors: [
+        { messageId: 'unexpectedThemeWithVariable' },
+        { messageId: 'unexpectedThemeWithVariable' },
+      ],
     },
     fixes(
       "background: linear-gradient(to right, v-bind('$themeTokens.fineLine'), transparent);",
@@ -122,7 +125,7 @@ ruleTester.run('no-theme-tokens-in-v-bind', rule, {
   .a { color: var(--tokens-text); }
 </style>
 `,
-      errors: [{ messageId: 'unexpectedTheme' }],
+      errors: [{ messageId: 'unexpectedThemeWithVariable' }],
     },
     {
       // nested at any depth, which is where KTable had it
@@ -141,7 +144,7 @@ ruleTester.run('no-theme-tokens-in-v-bind', rule, {
   }
 </style>
 `,
-      errors: [{ messageId: 'unexpectedTheme' }],
+      errors: [{ messageId: 'unexpectedThemeWithVariable' }],
     },
     {
       // every occurrence across every style block
@@ -162,7 +165,10 @@ ruleTester.run('no-theme-tokens-in-v-bind', rule, {
   .b { color: var(--tokens-text); }
 </style>
 `,
-      errors: [{ messageId: 'unexpectedTheme' }, { messageId: 'unexpectedTheme' }],
+      errors: [
+        { messageId: 'unexpectedThemeWithVariable' },
+        { messageId: 'unexpectedThemeWithVariable' },
+      ],
     },
     {
       // a compound expression is reported, but has no mechanical rewrite

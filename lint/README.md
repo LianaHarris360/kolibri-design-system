@@ -36,7 +36,7 @@ optionally reached through a namespace or `this`.
 It is fixed only where the rewrite is certain: the path has to resolve to a variable
 the theme actually emits, and a namespaced call such as `other.themeTokens()` is left
 alone, since that may be any object's method. Anything else it matches, including a
-compound expression such as a ternary, is reported but not fixed.
+compound expression such as a ternary, is reported as a warning but not fixed.
 
 A `v-bind()` naming a component member that reads the theme, like
 `v-bind(surfaceColor)`, is not matched at all. Theme CSS variables should be used in
@@ -95,8 +95,15 @@ so the rules stay in sync when tokens, brand colors, or palette colors are added
 
 Those files are ES modules of plain data, so they are read statically with
 `@babel/parser` rather than imported: only the shape of the exported object literals
-matters, never the color values. A test asserts that the derived set matches the
-variables `lib/styles/themeCssVariables.js` actually emits at runtime.
+matters, never the color values. A test asserts the derived set matches what
+`lib/styles/themeCssVariables.js` emits at runtime, so a name the parse misses or
+invents fails the suite.
+
+The naming itself lives in
+[`lib/styles/cssVariableNaming.js`](../lib/styles/cssVariableNaming.js), which the
+runtime, the derivation above, and `kds/no-theme-tokens-in-v-bind` all load, so a
+variable is named one way everywhere. It is Vue-free CommonJS and ships in the
+published `lib`, so `kolibri-format` can require it once these rules move there.
 
 ## Tests
 

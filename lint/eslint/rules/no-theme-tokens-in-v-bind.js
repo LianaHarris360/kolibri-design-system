@@ -3,10 +3,28 @@
  * fixes it to the equivalent theme CSS variable.
  */
 
+const {
+  THEME_ACCESSOR_PREFIXES,
+  themeCssVariableName,
+} = require('../../../lib/styles/cssVariableNaming');
 const { getThemeCssVariableNames } = require('../../themeCssVariableNames');
 
-const THEME_PREFIXES = { themeTokens: 'tokens', themeBrand: 'brand', themePalette: 'palette' };
-const THEME_FUNCTIONS = Object.keys(THEME_PREFIXES);
+const THEME_FUNCTIONS = Object.keys(THEME_ACCESSOR_PREFIXES);
+
+// `null` once reading the theme sources has failed, so it is attempted only once
+let themeVariableNames;
+
+/** The variables the theme emits, or `null` when they cannot be derived. */
+function knownThemeVariables() {
+  if (themeVariableNames === undefined) {
+    try {
+      themeVariableNames = getThemeCssVariableNames();
+    } catch {
+      themeVariableNames = null;
+    }
+  }
+  return themeVariableNames;
+}
 const THEME_PROPERTIES = THEME_FUNCTIONS.map(name => `$${name}`);
 
 /** Walks every node, skipping the `parent` back-references that would cycle. */
@@ -81,7 +99,7 @@ function findThemeReference(node) {
  */
 function accessorPrefix(node) {
   if (node.type === 'Identifier' && node.name.startsWith('$')) {
-    return THEME_PREFIXES[node.name.slice(1)] || null;
+    return THEME_ACCESSOR_PREFIXES[node.name.slice(1)] || null;
   }
   if (
     node.type === 'MemberExpression' &&
@@ -89,12 +107,12 @@ function accessorPrefix(node) {
     node.property.type === 'Identifier' &&
     node.property.name.startsWith('$')
   ) {
-    return THEME_PREFIXES[node.property.name.slice(1)] || null;
+    return THEME_ACCESSOR_PREFIXES[node.property.name.slice(1)] || null;
   }
   if (node.type === 'CallExpression') {
     const callee = node.callee;
     if (callee.type === 'Identifier') {
-      return THEME_PREFIXES[callee.name] || null;
+      return THEME_ACCESSOR_PREFIXES[callee.name] || null;
     }
   }
   return null;
@@ -114,16 +132,16 @@ function themeCssVariable(node) {
     current.property.type === 'Identifier' &&
     !accessorPrefix(current)
   ) {
-    // `formatPathSegment` in `lib/styles/themeCssVariables.js` does the same
-    segments.unshift(current.property.name.replace(/^v_(\d+)$/, 'v$1'));
+    segments.unshift(current.property.name);
     current = current.object;
   }
   const prefix = accessorPrefix(current);
   if (!prefix || !segments.length) {
     return null;
   }
-  const name = `--${prefix}-${segments.join('-')}`;
-  return getThemeCssVariableNames().has(name) ? `var(${name})` : null;
+  const name = themeCssVariableName(prefix, segments);
+  const known = knownThemeVariables();
+  return known && known.has(name) ? `var(${name})` : null;
 }
 
 /** The `v-bind()` containers of every `<style>` block. */
@@ -160,6 +178,8 @@ module.exports = {
       unexpectedTheme:
         'Unexpected `{{reference}}` inside `v-bind()`. Use a theme CSS variable instead, ' +
         'e.g. `var(--tokens-primary)`.',
+      unexpectedThemeWithVariable:
+        'Unexpected `{{reference}}` inside `v-bind()`. Use `{{variable}}` instead.',
     },
   },
   create(context) {
@@ -172,12 +192,20 @@ module.exports = {
             continue;
           }
           const variable = themeCssVariable(vBind.expression);
+          if (variable) {
+            context.report({
+              node: vBind.expression,
+              messageId: 'unexpectedThemeWithVariable',
+              data: { reference, variable },
+              // the whole `v-bind()` is replaced, so the container is the range
+              fix: fixer => fixer.replaceTextRange(vBind.range, variable),
+            });
+            continue;
+          }
           context.report({
             node: vBind.expression,
             messageId: 'unexpectedTheme',
             data: { reference },
-            // the whole `v-bind()` is replaced, so the container is the range
-            fix: variable ? fixer => fixer.replaceTextRange(vBind.range, variable) : null,
           });
         }
       },
