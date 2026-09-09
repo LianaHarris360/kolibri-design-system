@@ -11,7 +11,7 @@ stylelintConfig['rules']['selector-pseudo-element-no-unknown'] = [true, { ignore
 
 stylelintConfig['rules']['custom-property-pattern'] = ['^([a-z][a-zA-Z0-9]*)(-[a-zA-Z0-9]+)*$'];
 
-// Catches misspelled theme CSS variables, which otherwise resolve to nothing silently
+// Catches misspelled theme CSS variables
 stylelintConfig['rules']['kds/no-unknown-theme-custom-properties'] = true;
 
 module.exports = stylelintConfig;

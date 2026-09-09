@@ -93,17 +93,11 @@ from the same source files the runtime theme is built from, `defaultTokenMapping
 `defaultBrandColors` in `lib/styles/colorsDefault.js`, and `lib/styles/colorsMaterial.js`,
 so the rules stay in sync when tokens, brand colors, or palette colors are added.
 
-Those files are ES modules of plain data, so they are read statically with
-`@babel/parser` rather than imported: only the shape of the exported object literals
-matters, never the color values. A test asserts the derived set matches what
-`lib/styles/themeCssVariables.js` emits at runtime, so a name the parse misses or
-invents fails the suite.
-
-The naming itself lives in
-[`lib/styles/cssVariableNaming.js`](../lib/styles/cssVariableNaming.js), which the
-runtime, the derivation above, and `kds/no-theme-tokens-in-v-bind` all load, so a
-variable is named one way everywhere. It is Vue-free CommonJS and ships in the
-published `lib`, so `kolibri-format` can require it once these rules move there.
+Those files, and [`cssVariableNaming.js`](../lib/styles/cssVariableNaming.js) which
+holds the naming itself, are Vue-free CommonJS. The runtime, the derivation here, and
+`kds/no-theme-tokens-in-v-bind` all require the same modules, so a variable is named
+one way everywhere, and `kolibri-format` can require them from the published `lib`
+once these rules move there.
 
 ## Tests
 
