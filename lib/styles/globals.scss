@@ -1,7 +1,7 @@
-// Each theme variable below intentionally includes a literal fallback. Unresolved variables
-// make the entire declaration invalid at computed-value time, they only become
-// valid after `initThemeCssVariables()` is called. Fallbacks mirror the defaults
-// in colorsDefault.js / colorsMaterial.js
+// Every theme variable below has a literal fallback: an undefined custom property
+// invalidates the whole declaration, and these are only defined once
+// `initThemeCssVariables()` runs. The fallbacks mirror the defaults in
+// colorsDefault.js / colorsMaterial.js
 
 html,
 body {

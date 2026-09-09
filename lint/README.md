@@ -12,29 +12,35 @@ and `--palette-*`).
 
 ### `kds/no-theme-tokens-in-v-bind` (ESLint)
 
-Reports theme values reached from inside a `v-bind()` argument in a `<style>` block.
-Colors in style blocks should use the theme CSS variables instead:
+Reports a theme value read inside a `v-bind()` in a `<style>` block, and fixes it to
+the equivalent theme CSS variable, so `yarn lint-fix` makes the change:
 
 ```scss
-/* bad */
+/* before */
 .foo {
-  color: v-bind('themeTokens().primary');
-  background: v-bind('$themeTokens.surface');
-  border-color: v-bind(surfaceColor); /* a computed that reads the theme */
+  color: v-bind('$themeTokens.primary');
+  background: v-bind('$themePalette.grey.v_400');
 }
 
-/* good */
+/* after */
 .foo {
   color: var(--tokens-primary);
+  background: var(--palette-grey-v400);
 }
 ```
 
-It matches `themeTokens()`, `themeBrand()`, and `themePalette()`, the instance
-properties `$themeTokens`, `$themeBrand`, and `$themePalette`, and a `v-bind()` naming
-a `computed` or `methods` member that reads any of those. Member lookup goes one level
-deep, so a member that reaches the theme through another member is not reported. Only
-the member itself is matched, not a property that happens to share its name: with a
-theme-reading `color()` computed, `v-bind('styles.color')` is left alone.
+It matches the theme functions `themeTokens()`, `themeBrand()`, and `themePalette()`
+and the instance properties `$themeTokens`, `$themeBrand`, and `$themePalette`,
+optionally reached through a namespace or `this`.
+
+It is fixed only where the rewrite is certain: the path has to resolve to a variable
+the theme actually emits, and a namespaced call such as `other.themeTokens()` is left
+alone, since that may be any object's method. Anything else it matches, including a
+compound expression such as a ternary, is reported but not fixed.
+
+A `v-bind()` naming a component member that reads the theme, like
+`v-bind(surfaceColor)`, is not matched at all. Theme CSS variables should be used in
+these cases too.
 
 Implemented in [`eslint/rules/no-theme-tokens-in-v-bind.js`](./eslint/rules/no-theme-tokens-in-v-bind.js)
 and registered as the `kds` plugin in `eslint.config.mjs`.
@@ -44,6 +50,8 @@ and registered as the `kds` plugin in `eslint.config.mjs`.
 Enabled in `eslint.config.mjs`. Vue 2.7 stops updating a style block's `v-bind()` when
 the bound element is the template root and is removed and re-added (e.g. by a
 `v-if`). Wrapping the conditional element in a plain, non-conditional element avoids it.
+
+For components that have a root `v-if`, but no `v-bind()` in their `<style>` block, the rule is a false positive. Disable it with an `eslint-disable-next-line` comment at the top of the file, before the `<template>` block. See `lib/KTooltip/index.vue` for an example.
 
 See the [rule documentation](https://eslint.vuejs.org/rules/no-root-v-if).
 

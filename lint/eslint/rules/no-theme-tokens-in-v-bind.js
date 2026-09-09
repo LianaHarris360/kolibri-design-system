@@ -1,22 +1,15 @@
 /*
- * Reports theme values reached from inside a `v-bind()` argument in a `<style>`
- * block, whether directly (`themeTokens()`, `$themeTokens`) or through a
- * component member that reads the theme.
- *
- * Colors in style blocks should use the theme CSS variables instead, e.g.
- * `var(--tokens-primary)`, which avoids the extra component state a style
- * `v-bind()` needs, and the Vue 2.7 `v-bind()` bug it can run into.
+ * Reports a theme value read inside a `v-bind()` in a `<style>` block, and
+ * fixes it to the equivalent theme CSS variable.
  */
 
-// `themeTokens()` and friends, imported from `lib/styles/theme`
-const THEME_FUNCTIONS = ['themeTokens', 'themeBrand', 'themePalette'];
-// the same values as the instance properties `KThemePlugin` installs
-const THEME_PROPERTIES = ['$themeTokens', '$themeBrand', '$themePalette'];
+const { getThemeCssVariableNames } = require('../../themeCssVariableNames');
 
-/**
- * Walks every node of an AST, calling `visit(node, parent)`. Skips the `parent`
- * back-references `vue-eslint-parser` sets, which would otherwise cycle.
- */
+const THEME_PREFIXES = { themeTokens: 'tokens', themeBrand: 'brand', themePalette: 'palette' };
+const THEME_FUNCTIONS = Object.keys(THEME_PREFIXES);
+const THEME_PROPERTIES = THEME_FUNCTIONS.map(name => `$${name}`);
+
+/** Walks every node, skipping the `parent` back-references that would cycle. */
 function walk(node, visit, parent = null) {
   if (Array.isArray(node)) {
     for (const item of node) {
@@ -36,9 +29,8 @@ function walk(node, visit, parent = null) {
 }
 
 /**
- * Whether `node` is the property name in an access like `styles.color`, which is
- * not the theme property or component member of that name. `this.surfaceColor`
- * is the exception: there it is that member.
+ * Whether `node` is the property name in an access like `styles.$themeTokens`,
+ * which is not the theme property. `this.$themeTokens` is the exception.
  */
 function isPropertyName(node, parent) {
   return Boolean(
@@ -50,10 +42,7 @@ function isPropertyName(node, parent) {
   );
 }
 
-/**
- * The name of the theme value `node` reads, or `null`. Matches a call to one of
- * the theme functions, and a reference to one of the theme instance properties.
- */
+/** The name of the theme value `node` reads, or `null`. */
 function themeReferenceName(node) {
   if (node.type === 'Identifier' && THEME_PROPERTIES.includes(node.name)) {
     return node.name;
@@ -87,42 +76,57 @@ function findThemeReference(node) {
 }
 
 /**
- * Returns a `name -> node` map of the component's `computed` and `methods`
- * members, so a `v-bind()` naming one can be followed a single step to see
- * whether it reads the theme.
+ * The CSS variable prefix `node` is the theme accessor for, or `null`. A
+ * namespaced call is left out: `other.themeTokens()` may be any object's method.
  */
-function getComponentMembers(program) {
-  const members = new Map();
-  for (const statement of program.body) {
-    if (
-      statement.type !== 'ExportDefaultDeclaration' ||
-      statement.declaration.type !== 'ObjectExpression'
-    ) {
-      continue;
-    }
-    for (const option of statement.declaration.properties) {
-      if (
-        option.type !== 'Property' ||
-        option.key.type !== 'Identifier' ||
-        !['computed', 'methods'].includes(option.key.name) ||
-        option.value.type !== 'ObjectExpression'
-      ) {
-        continue;
-      }
-      for (const member of option.value.properties) {
-        if (member.type === 'Property' && member.key.type === 'Identifier') {
-          members.set(member.key.name, member.value);
-        }
-      }
+function accessorPrefix(node) {
+  if (node.type === 'Identifier' && node.name.startsWith('$')) {
+    return THEME_PREFIXES[node.name.slice(1)] || null;
+  }
+  if (
+    node.type === 'MemberExpression' &&
+    node.object.type === 'ThisExpression' &&
+    node.property.type === 'Identifier' &&
+    node.property.name.startsWith('$')
+  ) {
+    return THEME_PREFIXES[node.property.name.slice(1)] || null;
+  }
+  if (node.type === 'CallExpression') {
+    const callee = node.callee;
+    if (callee.type === 'Identifier') {
+      return THEME_PREFIXES[callee.name] || null;
     }
   }
-  return members;
+  return null;
 }
 
 /**
- * Returns the `v-bind()` expression containers of every `<style>` block, or an
- * empty array when the file is not a single file component.
+ * The theme CSS variable `node` reads, or `null` when it is not a plain path of
+ * property accesses, or does not name a variable the theme emits.
  */
+function themeCssVariable(node) {
+  const segments = [];
+  let current = node;
+  // stops at the accessor itself, so `this.$themeTokens` is a root, not a segment
+  while (
+    current.type === 'MemberExpression' &&
+    !current.computed &&
+    current.property.type === 'Identifier' &&
+    !accessorPrefix(current)
+  ) {
+    // `formatPathSegment` in `lib/styles/themeCssVariables.js` does the same
+    segments.unshift(current.property.name.replace(/^v_(\d+)$/, 'v$1'));
+    current = current.object;
+  }
+  const prefix = accessorPrefix(current);
+  if (!prefix || !segments.length) {
+    return null;
+  }
+  const name = `--${prefix}-${segments.join('-')}`;
+  return getThemeCssVariableNames().has(name) ? `var(${name})` : null;
+}
+
+/** The `v-bind()` containers of every `<style>` block. */
 function getStyleVBinds(sourceCode) {
   const parserServices = sourceCode.parserServices || {};
   const documentFragment =
@@ -150,53 +154,30 @@ module.exports = {
     docs: {
       description: 'disallow theme values inside `v-bind()` in a `<style>` block',
     },
+    fixable: 'code',
     schema: [],
     messages: {
       unexpectedTheme:
         'Unexpected `{{reference}}` inside `v-bind()`. Use a theme CSS variable instead, ' +
         'e.g. `var(--tokens-primary)`.',
-      unexpectedThemeMember:
-        'Unexpected `{{member}}` inside `v-bind()`, which reads `{{reference}}`. Use a theme ' +
-        'CSS variable instead, e.g. `var(--tokens-primary)`.',
     },
   },
   create(context) {
     const sourceCode = context.sourceCode || context.getSourceCode();
     return {
-      Program(program) {
-        const vBinds = getStyleVBinds(sourceCode);
-        if (!vBinds.length) {
-          return;
-        }
-        const members = getComponentMembers(program);
-        for (const vBind of vBinds) {
+      Program() {
+        for (const vBind of getStyleVBinds(sourceCode)) {
           const reference = findThemeReference(vBind.expression);
-          if (reference) {
-            context.report({
-              node: vBind.expression,
-              messageId: 'unexpectedTheme',
-              data: { reference },
-            });
+          if (!reference) {
             continue;
           }
-          // a `v-bind()` naming a component member that reads the theme itself
-          let reported = false;
-          walk(vBind.expression, (node, parent) => {
-            if (reported || node.type !== 'Identifier' || !members.has(node.name)) {
-              return;
-            }
-            if (isPropertyName(node, parent)) {
-              return;
-            }
-            const memberReference = findThemeReference(members.get(node.name));
-            if (memberReference) {
-              context.report({
-                node: vBind.expression,
-                messageId: 'unexpectedThemeMember',
-                data: { member: node.name, reference: memberReference },
-              });
-              reported = true;
-            }
+          const variable = themeCssVariable(vBind.expression);
+          context.report({
+            node: vBind.expression,
+            messageId: 'unexpectedTheme',
+            data: { reference },
+            // the whole `v-bind()` is replaced, so the container is the range
+            fix: variable ? fixer => fixer.replaceTextRange(vBind.range, variable) : null,
           });
         }
       },
