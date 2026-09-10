@@ -6,25 +6,11 @@
 const {
   THEME_ACCESSOR_PREFIXES,
   themeCssVariableName,
-} = require('../../../lib/styles/cssVariableNaming');
+} = require('../../../lib/styles/cssVariableNamingRules');
 const { getThemeCssVariableNames } = require('../../themeCssVariableNames');
 
 const THEME_FUNCTIONS = Object.keys(THEME_ACCESSOR_PREFIXES);
 
-// `null` once reading the theme sources has failed, so it is attempted only once
-let themeVariableNames;
-
-/** The variables the theme emits, or `null` when they cannot be derived. */
-function knownThemeVariables() {
-  if (themeVariableNames === undefined) {
-    try {
-      themeVariableNames = getThemeCssVariableNames();
-    } catch {
-      themeVariableNames = null;
-    }
-  }
-  return themeVariableNames;
-}
 const THEME_PROPERTIES = THEME_FUNCTIONS.map(name => `$${name}`);
 
 /** Walks every node, skipping the `parent` back-references that would cycle. */
@@ -140,7 +126,8 @@ function themeCssVariable(node) {
     return null;
   }
   const name = themeCssVariableName(prefix, segments);
-  const known = knownThemeVariables();
+  // `null` when the theme sources cannot be read, leaving the report unfixed
+  const known = getThemeCssVariableNames();
   return known && known.has(name) ? `var(${name})` : null;
 }
 

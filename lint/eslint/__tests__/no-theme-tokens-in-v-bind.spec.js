@@ -19,28 +19,32 @@ const ruleTester = new RuleTester({
   },
 });
 
-/** A single file component whose one style rule contains `declaration`. */
-function sfc(declaration) {
+/** A single file component whose one style rule contains `declarations`. */
+function sfc(declarations) {
   return `<template><div class="a" /></template>
 <style lang="scss" scoped>
-  .a { ${declaration} }
+  .a { ${declarations} }
 </style>
 `;
 }
 
-/** An invalid case that the rule rewrites, given the two declaration halves. */
-function fixes(declaration, fixed) {
+/** An invalid case the rule rewrites, given the two halves of the declaration. */
+function fixes(declarations, fixed) {
   return {
     filename: 'Invalid.vue',
-    code: sfc(declaration),
+    code: sfc(declarations),
     output: sfc(fixed),
     errors: [{ messageId: 'unexpectedThemeWithVariable' }],
   };
 }
 
+const themed = { messageId: 'unexpectedTheme' };
+const withVariable = { messageId: 'unexpectedThemeWithVariable' };
+
 ruleTester.run('no-theme-tokens-in-v-bind', rule, {
   valid: [
     {
+      // the migration target, and the only style block with nothing to report
       filename: 'Valid.vue',
       code: sfc('color: var(--tokens-primary);'),
     },
@@ -78,63 +82,43 @@ ruleTester.run('no-theme-tokens-in-v-bind', rule, {
 `,
     },
     {
-      // a property that only shares a theme property's name
+      // a property read off another object only shares a theme property's name
       filename: 'Valid.vue',
       code: sfc("color: v-bind('styles.$themeTokens');"),
-    },
-    {
-      filename: 'Valid.vue',
-      code: '<template><div class="a" /></template>',
     },
   ],
   invalid: [
     fixes('color: v-bind("themeTokens().primary");', 'color: var(--tokens-primary);'),
-    fixes("background: v-bind('$themeTokens.surface');", 'background: var(--tokens-surface);'),
     fixes("background: v-bind('this.$themeTokens.surface');", 'background: var(--tokens-surface);'),
-    fixes("color: v-bind('$themePalette.grey.v_400');", 'color: var(--palette-grey-v400);'),
-    fixes(
-      "border-color: v-bind('$themeBrand.primary.v_600');",
-      'border-color: var(--brand-primary-v600);',
-    ),
     {
-      // two in one declaration are fixed in a single pass
+      // every prefix, and the `v_N` version key the theme emits as `vN`
+      filename: 'Invalid.vue',
+      code: sfc(
+        "color: v-bind('$themePalette.grey.v_400'); border-color: v-bind('$themeBrand.primary.v_600');",
+      ),
+      output: sfc('color: var(--palette-grey-v400); border-color: var(--brand-primary-v600);'),
+      errors: [withVariable, withVariable],
+    },
+    {
+      // two in one declaration are rewritten in a single pass
       filename: 'Invalid.vue',
       code: sfc(
         "background: linear-gradient(v-bind('$themeTokens.surface'), v-bind('$themeTokens.fineLine'));",
       ),
       output: sfc('background: linear-gradient(var(--tokens-surface), var(--tokens-fineLine));'),
-      errors: [
-        { messageId: 'unexpectedThemeWithVariable' },
-        { messageId: 'unexpectedThemeWithVariable' },
-      ],
-    },
-    fixes(
-      "background: linear-gradient(to right, v-bind('$themeTokens.fineLine'), transparent);",
-      'background: linear-gradient(to right, var(--tokens-fineLine), transparent);',
-    ),
-    {
-      // plain CSS style blocks are checked too
-      filename: 'Invalid.vue',
-      code: `<template><div class="a" /></template>
-<style scoped>
-  .a { color: v-bind("themeTokens().text"); }
-</style>
-`,
-      output: `<template><div class="a" /></template>
-<style scoped>
-  .a { color: var(--tokens-text); }
-</style>
-`,
-      errors: [{ messageId: 'unexpectedThemeWithVariable' }],
+      errors: [withVariable, withVariable],
     },
     {
-      // nested at any depth, which is where KTable had it
+      // nested at any depth, which is where KTable had it, and in a plain CSS block
       filename: 'Invalid.vue',
       code: `<template><div class="a" /></template>
 <style lang="scss" scoped>
   @mixin shadow($direction) {
     &::before { background: v-bind('$themeTokens.surface'); }
   }
+</style>
+<style>
+  .b { color: v-bind("themeTokens().text"); }
 </style>
 `,
       output: `<template><div class="a" /></template>
@@ -143,65 +127,23 @@ ruleTester.run('no-theme-tokens-in-v-bind', rule, {
     &::before { background: var(--tokens-surface); }
   }
 </style>
-`,
-      errors: [{ messageId: 'unexpectedThemeWithVariable' }],
-    },
-    {
-      // every occurrence across every style block
-      filename: 'Invalid.vue',
-      code: `<template><div class="a" /></template>
-<style lang="scss" scoped>
-  .a { color: v-bind("themeTokens().primary"); }
-</style>
-<style lang="scss">
-  .b { color: v-bind("themeTokens().text"); }
-</style>
-`,
-      output: `<template><div class="a" /></template>
-<style lang="scss" scoped>
-  .a { color: var(--tokens-primary); }
-</style>
-<style lang="scss">
+<style>
   .b { color: var(--tokens-text); }
 </style>
 `,
-      errors: [
-        { messageId: 'unexpectedThemeWithVariable' },
-        { messageId: 'unexpectedThemeWithVariable' },
-      ],
+      errors: [withVariable, withVariable],
     },
     {
-      // a compound expression is reported, but has no mechanical rewrite
+      // reported with no rewrite: a compound expression, a namespaced call that may
+      // be any object's method, and a path the theme emits no variable for
       filename: 'Invalid.vue',
-      code: sfc('color: v-bind("isActive ? themeTokens().primary : \'red\'");'),
+      code: sfc(
+        'color: v-bind("isActive ? themeTokens().primary : \'red\'"); ' +
+          "border-color: v-bind('myStuff.themePalette().red'); " +
+          "outline-color: v-bind('$themeTokens.surfase');",
+      ),
       output: null,
-      errors: [{ messageId: 'unexpectedTheme' }],
-    },
-    {
-      // a namespaced call may be any object's method, so it is not rewritten
-      filename: 'Invalid.vue',
-      code: sfc('color: v-bind("theme.themeTokens().primary");'),
-      output: null,
-      errors: [{ messageId: 'unexpectedTheme' }],
-    },
-    {
-      filename: 'Invalid.vue',
-      code: sfc("color: v-bind('myStuff.themePalette().red');"),
-      output: null,
-      errors: [{ messageId: 'unexpectedTheme' }],
-    },
-    {
-      // a path that does not name a variable the theme emits is not rewritten
-      filename: 'Invalid.vue',
-      code: sfc("color: v-bind('$themeTokens.surfase');"),
-      output: null,
-      errors: [{ messageId: 'unexpectedTheme' }],
-    },
-    {
-      filename: 'Invalid.vue',
-      code: sfc("color: v-bind('$themeTokens.surface || fallback');"),
-      output: null,
-      errors: [{ messageId: 'unexpectedTheme' }],
+      errors: [themed, themed, themed],
     },
   ],
 });

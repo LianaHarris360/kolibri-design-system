@@ -36,7 +36,7 @@ optionally reached through a namespace or `this`.
 It is fixed only where the rewrite is certain: the path has to resolve to a variable
 the theme actually emits, and a namespaced call such as `other.themeTokens()` is left
 alone, since that may be any object's method. Anything else it matches, including a
-compound expression such as a ternary, is reported as a warning but not fixed.
+compound expression such as a ternary, is reported but not fixed.
 
 A `v-bind()` naming a component member that reads the theme, like
 `v-bind(surfaceColor)`, is not matched at all. Theme CSS variables should be used in
@@ -47,7 +47,7 @@ and registered as the `kds` plugin in `eslint.config.mjs`.
 
 ### `vue/no-root-v-if` (ESLint)
 
-Enabled as a warning in `eslint.config.mjs`. Vue 2.7 stops updating a style block's `v-bind()` when
+Enabled in `eslint.config.mjs`. Vue 2.7 stops updating a style block's `v-bind()` when
 the bound element is the template root and is removed and re-added (e.g. by a
 `v-if`). Wrapping the conditional element in a plain, non-conditional element avoids it.
 
@@ -86,6 +86,35 @@ component `<style>` blocks and standalone `.scss` files.
 Implemented in [`stylelint/no-unknown-theme-custom-properties.js`](./stylelint/no-unknown-theme-custom-properties.js)
 and registered in `.stylelintrc.js`.
 
+### `kds/require-theme-var-fallback` (stylelint)
+
+Requires a literal fallback on a theme `var()`, and adds it:
+
+```scss
+/* before */
+.foo {
+  color: var(--tokens-primary);
+}
+
+/* after */
+.foo {
+  color: var(--tokens-primary, #4368F5);
+}
+```
+
+Until `initThemeCssVariables()` has run, the variables are undefined, and an undefined custom property makes its entire declaration invalid. This means styles shipped from the KDS repository cannot rely on them alone, so a literal fallback is required.
+
+A `var()` naming a property the theme does not emit is left alone: a component's own
+custom property, or one an app added at runtime with `setTokenMapping()`, has no theme
+value to fall back to.
+
+Only the KDS repository ships styles that may be applied before the variables are
+emitted, so it is enabled in `.stylelintrc.js` here. Consuming apps should leave it
+off, rather than have KDS color values written into their source.
+
+Implemented in [`stylelint/require-theme-var-fallback.js`](./stylelint/require-theme-var-fallback.js)
+and registered in `.stylelintrc.js`.
+
 ## Where the valid names come from
 
 [`themeCssVariableNames.js`](./themeCssVariableNames.js) derives the set of valid names
@@ -93,7 +122,7 @@ from the same source files the runtime theme is built from, `defaultTokenMapping
 `defaultBrandColors` in `lib/styles/colorsDefault.js`, and `lib/styles/colorsMaterial.js`,
 so the rules stay in sync when tokens, brand colors, or palette colors are added.
 
-Those files, and [`cssVariableNaming.js`](../lib/styles/cssVariableNaming.js) which
+Those files, and [`cssVariableNamingRules.js`](../lib/styles/cssVariableNamingRules.js) which
 holds the naming itself, are Vue-free CommonJS. The runtime, the derivation here, and
 `kds/no-theme-tokens-in-v-bind` all require the same modules, so a variable is named
 one way everywhere, and `kolibri-format` can require them from the published `lib`

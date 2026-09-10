@@ -9,6 +9,8 @@ import path from 'node:path';
 
 import stylelint from 'stylelint';
 
+import { getThemeCssVariableValues } from '../themeCssVariableNames';
+
 import stylelintConfig from '../../.stylelintrc';
 
 const ROOT_DIR = path.resolve(__dirname, '../..');
@@ -24,6 +26,32 @@ describe('.stylelintrc.js', () => {
     });
     const rules = results[0].warnings.map(warning => warning.rule);
     expect(rules).toContain('kds/no-unknown-theme-custom-properties');
+  });
+
+  it('fixes a `v_N` name and its fallback together, through both rules', async () => {
+    const { output } = await stylelint.lint({
+      code: '.a { color: var(--palette-grey-v_400); }',
+      codeFilename: path.join(ROOT_DIR, 'lib/smokeTest.scss'),
+      customSyntax: 'postcss-scss',
+      config: stylelintConfig,
+      configBasedir: ROOT_DIR,
+      fix: true,
+    });
+    const grey = getThemeCssVariableValues().get('--palette-grey-v400').toLowerCase();
+    expect(output).toBe(`.a { color: var(--palette-grey-v400, ${grey}); }`);
+  });
+
+  it('enables `kds/require-theme-var-fallback`, and fixes through it', async () => {
+    const { output } = await stylelint.lint({
+      code: '.a { color: var(--tokens-surface); }',
+      codeFilename: path.join(ROOT_DIR, 'lib/smokeTest.scss'),
+      customSyntax: 'postcss-scss',
+      config: stylelintConfig,
+      configBasedir: ROOT_DIR,
+      fix: true,
+    });
+    const surface = getThemeCssVariableValues().get('--tokens-surface').toLowerCase();
+    expect(output).toBe(`.a { color: var(--tokens-surface, ${surface}); }`);
   });
 });
 

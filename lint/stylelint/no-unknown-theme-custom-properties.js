@@ -7,6 +7,8 @@ const stylelint = require('stylelint');
 const valueParser = require('postcss-value-parser');
 
 const {
+  atRuleParamsIndex,
+  declarationValueIndex,
   getThemeCssVariableNames,
   isThemedCustomProperty,
   suggestThemeCssVariableName,
@@ -41,23 +43,6 @@ const meta = {
   fixable: true,
 };
 
-/**
- * Index of a declaration's value within the declaration's own source, used to
- * point the report at the offending name rather than the whole declaration.
- */
-function declarationValueIndex(decl) {
-  const raws = decl.raws;
-  const between = (raws.between !== undefined ? raws.between : ':').length;
-  const prefix = (raws.prop && raws.prop.prefix ? raws.prop.prefix : '').length;
-  return decl.prop.length + prefix + between;
-}
-
-/** The same, for an at-rule's params, which follow `@`, the name, and any space. */
-function atRuleParamsIndex(atRule) {
-  const afterName = atRule.raws.afterName !== undefined ? atRule.raws.afterName : ' ';
-  return 1 + atRule.name.length + afterName.length;
-}
-
 const rule = (primary, secondary, context) => {
   return (root, result) => {
     const validOptions = stylelint.utils.validateOptions(
@@ -82,12 +67,18 @@ const rule = (primary, secondary, context) => {
     const ignoreProperties = secondary && secondary.ignoreProperties;
 
     const validNames = getThemeCssVariableNames();
+    if (!validNames) {
+      return;
+    }
 
     const handleUnknownNames = (node, property, valueIndex) => {
       const parsed = valueParser(node[property]);
+      // postcss keeps a comment written inside a value in `raws`, which rewriting
+      // the value would drop, so this declaration is only reported, to be fixed by hand
+      const canFix = context.fix && !node.raws[property];
       let rewritten = false;
       parsed.walk(valueNode => {
-        if (valueNode.type !== 'function' || valueNode.value !== 'var') {
+        if (valueNode.type !== 'function' || valueNode.value.toLowerCase() !== 'var') {
           return;
         }
         const [nameNode] = valueNode.nodes;
@@ -104,7 +95,7 @@ const rule = (primary, secondary, context) => {
         }
         const suggestion = suggestThemeCssVariableName(name);
         // only the source `v_N` version key form has a certain replacement
-        if (context.fix && suggestion) {
+        if (canFix && suggestion) {
           nameNode.value = suggestion;
           rewritten = true;
           return;

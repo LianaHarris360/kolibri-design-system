@@ -1,6 +1,7 @@
 import { generateThemeCssVariables } from '../../lib/styles/themeCssVariables';
 import {
   getThemeCssVariableNames,
+  getThemeCssVariableValues,
   isThemedCustomProperty,
   suggestThemeCssVariableName,
 } from '../themeCssVariableNames';
@@ -11,6 +12,14 @@ describe('getThemeCssVariableNames', () => {
     // fails if the lint rules ever fall out of sync with the theme
     const emitted = Object.keys(generateThemeCssVariables()).sort();
     const derived = [...getThemeCssVariableNames()].sort();
+    expect(derived).toEqual(emitted);
+  });
+
+  it('matches the values the theme emits, including tokens it resolves by path', () => {
+    // the lint side resolves `tokenMapping` paths itself, so this fails if that
+    // ever diverges from what `theme.js` resolves them to
+    const emitted = generateThemeCssVariables();
+    const derived = Object.fromEntries(getThemeCssVariableValues());
     expect(derived).toEqual(emitted);
   });
 
