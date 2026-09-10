@@ -38,6 +38,7 @@ function isIgnored(name, ignoreProperties) {
 
 const meta = {
   url: 'https://github.com/learningequality/kolibri-design-system/blob/develop/lint/README.md',
+  fixable: true,
 };
 
 /**
@@ -57,7 +58,7 @@ function atRuleParamsIndex(atRule) {
   return 1 + atRule.name.length + afterName.length;
 }
 
-const rule = (primary, secondary) => {
+const rule = (primary, secondary, context) => {
   return (root, result) => {
     const validOptions = stylelint.utils.validateOptions(
       result,
@@ -82,8 +83,10 @@ const rule = (primary, secondary) => {
 
     const validNames = getThemeCssVariableNames();
 
-    const reportUnknownNames = (node, value, valueIndex) => {
-      valueParser(value).walk(valueNode => {
+    const handleUnknownNames = (node, property, valueIndex) => {
+      const parsed = valueParser(node[property]);
+      let rewritten = false;
+      parsed.walk(valueNode => {
         if (valueNode.type !== 'function' || valueNode.value !== 'var') {
           return;
         }
@@ -99,23 +102,31 @@ const rule = (primary, secondary) => {
         if (isIgnored(name, ignoreProperties)) {
           return;
         }
+        const suggestion = suggestThemeCssVariableName(name);
+        // only the source `v_N` version key form has a certain replacement
+        if (context.fix && suggestion) {
+          nameNode.value = suggestion;
+          rewritten = true;
+          return;
+        }
         stylelint.utils.report({
           result,
           ruleName,
           message: messages.rejected,
-          messageArgs: [name, suggestThemeCssVariableName(name)],
+          messageArgs: [name, suggestion],
           node,
           index: valueIndex + nameNode.sourceIndex,
           endIndex: valueIndex + nameNode.sourceEndIndex,
         });
       });
+      if (rewritten) {
+        node[property] = parsed.toString();
+      }
     };
 
-    root.walkDecls(decl => reportUnknownNames(decl, decl.value, declarationValueIndex(decl)));
+    root.walkDecls(decl => handleUnknownNames(decl, 'value', declarationValueIndex(decl)));
     // a `var()` passed to an at-rule, e.g. `@include shadow(var(--tokens-surface))`
-    root.walkAtRules(atRule =>
-      reportUnknownNames(atRule, atRule.params, atRuleParamsIndex(atRule)),
-    );
+    root.walkAtRules(atRule => handleUnknownNames(atRule, 'params', atRuleParamsIndex(atRule)));
   };
 };
 
