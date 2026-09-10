@@ -4,7 +4,8 @@
  * so lint rules stay in sync when tokens, brand colors, or palette colors are added.
  */
 
-const materialColors = require('../lib/styles/colorsMaterial');
+// these are ES modules, loaded through Node's `require(esm)` support
+const materialColors = require('../lib/styles/colorsMaterial').default;
 const { defaultBrandColors, defaultTokenMapping } = require('../lib/styles/colorsDefault');
 const {
   THEME_VARIABLE_PREFIXES,
