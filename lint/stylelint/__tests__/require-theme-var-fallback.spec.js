@@ -79,6 +79,21 @@ describe('require-theme-var-fallback', () => {
     expect(await fixed(code)).toBe(`.a { color: var(--tokens-surface, ${SURFACE}); }`);
   });
 
+  it('reports a fallback that is not a color literal, leaving it to be fixed by hand', async () => {
+    // `transparent` or a SCSS variable may be a deliberate choice, so the fix does not
+    // overwrite it: the manual fix is to write the value, or `stylelint-disable` the line
+    for (const written of ['transparent', '$white']) {
+      const code = `.a { color: var(--tokens-surface, ${written}); }`;
+      const warnings = await warningsFor(code);
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0].text).toBe(messages.mismatch('--tokens-surface', written, SURFACE));
+      // still reported under `fix`, because nothing was rewritten
+      const { output, results } = await lintScss(code, true);
+      expect(output).toBe(code);
+      expect(results[0].warnings.filter(warning => warning.rule === ruleName)).toHaveLength(1);
+    }
+  });
+
   it('leaves a correct fallback alone, whatever case it is written in', async () => {
     for (const value of [SURFACE, SURFACE.toUpperCase()]) {
       const code = `.a { color: var(--tokens-surface, ${value}); }`;

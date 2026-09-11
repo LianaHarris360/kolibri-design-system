@@ -31,10 +31,11 @@ the equivalent theme CSS variable, so `yarn lint-fix` makes the change:
 
 It matches the theme functions `themeTokens()`, `themeBrand()`, and `themePalette()`,
 including through a namespace such as `theme.themeTokens()`. It also matches the
-instance properties `$themeTokens`, `$themeBrand`, and `$themePalette`, but only on
-`this`: a property read off any other object is skipped, so neither
-`v-bind('styles.$themeTokens')` nor `v-bind('styles.$themeTokens.primary')` is
-matched.
+instance properties `$themeTokens`, `$themeBrand`, and `$themePalette`, written either
+bare or on `this`, so `v-bind('$themeTokens.primary')` and
+`v-bind('this.$themeTokens.primary')` are autofixed to `var(--tokens-primary)`. Only a read
+off some other object is skipped, so neither `v-bind('styles.$themeTokens')` nor
+`v-bind('styles.$themeTokens.primary')` is matched.
 
 It is fixed only where the rewrite is certain: the path has to resolve to a variable
 the theme actually emits, and a namespaced call such as `other.themeTokens()` is left
@@ -105,15 +106,37 @@ Requires a literal fallback on a theme `var()`, and adds it:
 }
 ```
 
-Until `initThemeCssVariables()` has run, the variables are undefined, and an undefined custom property makes its entire declaration invalid. This means styles shipped from the KDS repository cannot rely on them alone, so a literal fallback is required.
+Until `initThemeCssVariables()` has run, from `Vue.use(KThemePlugin)`, the variables are
+undefined, and an undefined custom property makes its entire declaration invalid, so a literal
+fallback is required. It is enabled in `.stylelintrc.js` because KDS ships its styles into other
+applications. Consuming apps should leave the fallback off, rather than have KDS color values
+written into their source.
 
 A `var()` naming a property the theme does not emit is left alone: a component's own
 custom property, or one an app added at runtime with `setTokenMapping()`, has no theme
 value to fall back to.
 
-Only the KDS repository ships styles that may be applied before the variables are
-emitted, so it is enabled in `.stylelintrc.js` here. Consuming apps should leave it
-off, rather than have KDS color values written into their source.
+A fallback already written as a color literal is corrected to the value the theme emits.
+One that is not, such as `transparent`, `currentColor` or a SCSS variable, may be a
+deliberate choice, so it is reported and left in place, rather than have `yarn lint-fix`
+silently change its meaning:
+
+```
+Expected "var(--tokens-surface)" to fall back to "#ffffff", not "transparent"
+```
+
+It should be fixed manually, either by writing the emitted value in its place, or, where the
+fallback is intended, keeping it and disabling the rule on the line:
+
+```scss
+.foo {
+  /* stylelint-disable-next-line kds/require-theme-var-fallback */
+  background: var(--tokens-surface, transparent);
+}
+```
+
+A fallback that is not a single literal at all, such as a nested `var()` chain, is
+taken as deliberate and not reported.
 
 Implemented in [`stylelint/require-theme-var-fallback.js`](./stylelint/require-theme-var-fallback.js)
 and registered in `.stylelintrc.js`.

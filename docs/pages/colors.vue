@@ -94,6 +94,18 @@
         <div class="error-message">This is an error</div>
       </DocsShow>
       <p>
+        These variables are defined by <code>Vue.use(KThemePlugin)</code>, so any stylesheet
+        referencing one without a fallback paints with the inherited color until the bundle runs. A
+        literal fallback avoids that, as in <code>var(--tokens-error, #d21e00)</code>.
+      </p>
+
+      <p>
+        A lint rule adds these throughout KDS, which ships its styles into other applications.
+        Consuming apps should leave it off, rather than have KDS color values written into their
+        source.
+      </p>
+
+      <p>
         For palette and brand variables, replace the dots in the path with hyphens and drop the
         underscore (<code>palette.grey.v_400</code> becomes <code>--palette-grey-v400</code>). Token
         names are used as-is.
