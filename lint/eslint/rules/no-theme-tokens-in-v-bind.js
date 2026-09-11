@@ -126,9 +126,7 @@ function themeCssVariable(node) {
     return null;
   }
   const name = themeCssVariableName(prefix, segments);
-  // `null` when the theme sources cannot be read, leaving the report unfixed
-  const known = getThemeCssVariableNames();
-  return known && known.has(name) ? `var(${name})` : null;
+  return getThemeCssVariableNames().has(name) ? `var(${name})` : null;
 }
 
 /** The `v-bind()` containers of every `<style>` block. */

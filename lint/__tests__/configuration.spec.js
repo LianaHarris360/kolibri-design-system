@@ -56,12 +56,14 @@ describe('.stylelintrc.js', () => {
 });
 
 describe('eslint.config.mjs', () => {
+  const ERROR = 2;
+
   /*
    * ESLint loads a flat config with a dynamic import, which Jest cannot do
    * without `--experimental-vm-modules`, so run it in a child process, the
    * same code path CI takes.
    */
-  function ruleIdsFor(code) {
+  function ruleSeveritiesFor(code) {
     const script = `
       import { ESLint } from 'eslint';
       const linter = new ESLint({
@@ -70,7 +72,9 @@ describe('eslint.config.mjs', () => {
       const results = await linter.lintText(${JSON.stringify(code)}, {
         filePath: ${JSON.stringify(path.join(ROOT_DIR, 'lib/SmokeTest.vue'))},
       });
-      console.log(JSON.stringify(results[0].messages.map(message => message.ruleId)));
+      console.log(
+        JSON.stringify(results[0].messages.map(message => [message.ruleId, message.severity])),
+      );
     `;
     const output = execFileSync(process.execPath, ['--input-type=module', '-e', script], {
       cwd: ROOT_DIR,
@@ -83,9 +87,9 @@ describe('eslint.config.mjs', () => {
   const TIMEOUT = 30000;
 
   it(
-    'enables `kds/no-theme-tokens-in-v-bind` and `vue/no-root-v-if`',
+    'enables `kds/no-theme-tokens-in-v-bind` and `vue/no-root-v-if` as errors',
     () => {
-      const ruleIds = ruleIdsFor(`<template>
+      const severities = ruleSeveritiesFor(`<template>
   <div
     v-if="show"
     class="a"
@@ -100,8 +104,10 @@ describe('eslint.config.mjs', () => {
   }
 </style>
 `);
-      expect(ruleIds).toContain('kds/no-theme-tokens-in-v-bind');
-      expect(ruleIds).toContain('vue/no-root-v-if');
+      // the severity matters: `kolibri-format` gates on the error count, so a
+      // warning would leave `yarn lint` green with neither rule enforced
+      expect(severities).toContainEqual(['kds/no-theme-tokens-in-v-bind', ERROR]);
+      expect(severities).toContainEqual(['vue/no-root-v-if', ERROR]);
     },
     TIMEOUT,
   );

@@ -40,9 +40,6 @@ const rule = (primary, secondary, context) => {
     }
 
     const values = getThemeCssVariableValues();
-    if (!values) {
-      return;
-    }
 
     const handleMissingFallbacks = (node, property, valueIndex) => {
       const parsed = valueParser(node[property]);
@@ -77,10 +74,13 @@ const rule = (primary, secondary, context) => {
         // a fallback that is not a single literal, such as a nested `var()` chain,
         // is deliberate and left alone
         const literal = fallback.length === 2 && fallback[1].type === 'word' && fallback[1];
+        // `transparent`, `currentColor` or a SCSS variable is a deliberate choice, so
+        // only a color literal is overwritten; the rest are reported to be changed by hand
+        const overwritable = literal && /^#[0-9a-f]{3,8}$/i.test(literal.value);
         if ((fallback.length && !literal) || (literal && literal.value.toLowerCase() === value)) {
           return;
         }
-        if (canFix) {
+        if (canFix && (!literal || overwritable)) {
           if (literal) {
             literal.value = value;
           } else {

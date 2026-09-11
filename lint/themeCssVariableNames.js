@@ -1,38 +1,26 @@
 // Shared helpers for the theming lint rules
 
+// these are ES modules, loaded through Node's `require(esm)` support
+const materialColors = require('../lib/styles/colorsMaterial').default;
+const { defaultBrandColors, defaultTokenMapping } = require('../lib/styles/colorsDefault');
 const {
   THEME_VARIABLE_PREFIXES,
   flattenThemeTree,
   formatPathSegment,
 } = require('../lib/styles/cssVariableNamingRules');
 
-// only a success is cached, a read that fails once is retried
 let cachedNames = null;
 let cachedValues = null;
 
-/*
- * Read on demand, so that a failure to read them degrades the accessors below
- * instead of failing to load the rules. These are ES modules, loaded through
- * Node's `require(esm)` support.
- */
-function readSources() {
-  const materialColors = require('../lib/styles/colorsMaterial').default;
-  const { defaultBrandColors, defaultTokenMapping } = require('../lib/styles/colorsDefault');
-  return {
-    materialColors,
-    defaultBrandColors,
-    defaultTokenMapping,
-    // the tree `tokenMapping` paths are resolved against, as `theme.js` resolves them
-    colors: { palette: materialColors, brand: defaultBrandColors },
-  };
-}
+// the tree `tokenMapping` paths are resolved against, as `theme.js` resolves them
+const colors = { palette: materialColors, brand: defaultBrandColors };
 
 /**
  * The color a `tokenMapping` entry points at, or `null` when it does not resolve.
  * Mirrors `generateTokenToColorMapping` in `lib/styles/theme.js`, which walks the
  * same dot path and treats a value without one as a literal color.
  */
-function resolveToken(mapString, colors) {
+function resolveToken(mapString) {
   if (!mapString.includes('.')) {
     return mapString;
   }
@@ -53,16 +41,6 @@ function getThemeCssVariableNames() {
   if (cachedNames) {
     return cachedNames;
   }
-  try {
-    cachedNames = readNames();
-  } catch (error) {
-    return null;
-  }
-  return cachedNames;
-}
-
-function readNames() {
-  const { materialColors, defaultBrandColors, defaultTokenMapping } = readSources();
   const names = [
     ...flattenThemeTree('palette', materialColors),
     ...flattenThemeTree('brand', defaultBrandColors),
@@ -71,7 +49,8 @@ function readNames() {
   if (!names.length) {
     throw new Error('No theme CSS variable names were found in the theme source files');
   }
-  return new Set(names);
+  cachedNames = new Set(names);
+  return cachedNames;
 }
 
 /**
@@ -82,27 +61,18 @@ function getThemeCssVariableValues() {
   if (cachedValues) {
     return cachedValues;
   }
-  try {
-    cachedValues = readValues();
-  } catch (error) {
-    return null;
-  }
-  return cachedValues;
-}
-
-function readValues() {
-  const { materialColors, defaultBrandColors, defaultTokenMapping, colors } = readSources();
   const values = new Map([
     ...flattenThemeTree('palette', materialColors),
     ...flattenThemeTree('brand', defaultBrandColors),
   ]);
   for (const [name, mapString] of flattenThemeTree('tokens', defaultTokenMapping)) {
-    const value = resolveToken(mapString, colors);
+    const value = resolveToken(mapString);
     if (value) {
       values.set(name, value);
     }
   }
-  return values;
+  cachedValues = values;
+  return cachedValues;
 }
 
 function isThemedCustomProperty(name) {
@@ -113,9 +83,8 @@ function isThemedCustomProperty(name) {
  * Returns the valid name an invalid one was probably meant to be, or `null`.
  */
 function suggestThemeCssVariableName(name) {
-  const names = getThemeCssVariableNames();
   const normalized = name.split('-').map(formatPathSegment).join('-');
-  if (names && normalized !== name && names.has(normalized)) {
+  if (normalized !== name && getThemeCssVariableNames().has(normalized)) {
     return normalized;
   }
   return null;

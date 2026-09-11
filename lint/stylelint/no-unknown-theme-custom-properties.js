@@ -67,9 +67,6 @@ const rule = (primary, secondary, context) => {
     const ignoreProperties = secondary && secondary.ignoreProperties;
 
     const validNames = getThemeCssVariableNames();
-    if (!validNames) {
-      return;
-    }
 
     const handleUnknownNames = (node, property, valueIndex) => {
       const parsed = valueParser(node[property]);
