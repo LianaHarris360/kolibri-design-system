@@ -29,9 +29,12 @@ the equivalent theme CSS variable, so `yarn lint-fix` makes the change:
 }
 ```
 
-It matches the theme functions `themeTokens()`, `themeBrand()`, and `themePalette()`
-and the instance properties `$themeTokens`, `$themeBrand`, and `$themePalette`,
-optionally reached through a namespace or `this`.
+It matches the theme functions `themeTokens()`, `themeBrand()`, and `themePalette()`,
+including through a namespace such as `theme.themeTokens()`. It also matches the
+instance properties `$themeTokens`, `$themeBrand`, and `$themePalette`, but only on
+`this`: a property read off any other object is skipped, so neither
+`v-bind('styles.$themeTokens')` nor `v-bind('styles.$themeTokens.primary')` is
+matched.
 
 It is fixed only where the rewrite is certain: the path has to resolve to a variable
 the theme actually emits, and a namespaced call such as `other.themeTokens()` is left
@@ -122,11 +125,14 @@ from the same source files the runtime theme is built from, `defaultTokenMapping
 `defaultBrandColors` in `lib/styles/colorsDefault.js`, and `lib/styles/colorsMaterial.js`,
 so the rules stay in sync when tokens, brand colors, or palette colors are added.
 
-Those files, and [`cssVariableNamingRules.js`](../lib/styles/cssVariableNamingRules.js) which
-holds the naming itself, are Vue-free CommonJS. The runtime, the derivation here, and
-`kds/no-theme-tokens-in-v-bind` all require the same modules, so a variable is named
-one way everywhere, and `kolibri-format` can require them from the published `lib`
-once these rules move there.
+Those files, and [`cssVariableNamingRules.js`](../lib/styles/cssVariableNamingRules.js)
+which holds the naming itself, are Vue-free ES modules. The runtime imports them, and
+the rules here load the same modules through Node's `require(esm)` support, so a
+variable is named one way everywhere and `kolibri-format` can read them from the
+published `lib` once these rules move there.
+
+`require(esm)` is unflagged from Node 20.19 and 22.12 onwards, so the rules will not
+load on anything older.
 
 ## Tests
 
